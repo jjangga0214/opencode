@@ -8,6 +8,7 @@ import { NodeFileSystem } from "@effect/platform-node"
 import { AppFileSystem } from "@opencode-ai/shared/filesystem"
 import { Global } from "@opencode-ai/shared/global"
 import { EffectFlock } from "@opencode-ai/shared/util/effect-flock"
+import { NpmConfig } from "./config"
 
 import { makeRuntime } from "../effect/runtime"
 
@@ -76,21 +77,27 @@ export const layer = Layer.effect(
     const global = yield* Global.Service
     const fs = yield* FileSystem.FileSystem
     const flock = yield* EffectFlock.Service
+    const npmConfig = yield* NpmConfig.Service
     const directory = (pkg: string) => path.join(global.cache, "packages", sanitize(pkg))
     const reify = (input: { dir: string; add?: string[] }) =>
       Effect.gen(function* () {
         yield* flock.acquire(`npm-install:${input.dir}`)
         const { Arborist } = yield* Effect.promise(() => import("@npmcli/arborist"))
-        const arborist = new Arborist({
-          path: input.dir,
-          binLinks: true,
-          progress: false,
-          savePrefix: "",
-          ignoreScripts: true,
-        })
+        const options = yield* npmConfig.arboristOptions(input.dir).pipe(
+          Effect.mapError(
+            (cause) =>
+              new InstallFailedError({
+                cause,
+                add: input.add,
+                dir: input.dir,
+              }),
+          ),
+        )
+        const arborist = new Arborist(options)
         return yield* Effect.tryPromise({
           try: () =>
             arborist.reify({
+              ...options,
               add: input?.add || [],
               save: true,
               saveType: "prod",
@@ -266,6 +273,7 @@ export const defaultLayer = layer.pipe(
   Layer.provide(EffectFlock.layer),
   Layer.provide(AppFileSystem.layer),
   Layer.provide(Global.layer),
+  Layer.provide(NpmConfig.defaultLayer),
   Layer.provide(NodeFileSystem.layer),
 )
 

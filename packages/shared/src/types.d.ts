@@ -1,5 +1,6 @@
 declare module "@npmcli/arborist" {
   export interface ArboristOptions {
+    [key: string]: unknown
     path: string
     binLinks?: boolean
     progress?: boolean
@@ -21,6 +22,7 @@ declare module "@npmcli/arborist" {
   }
 
   export interface ReifyOptions {
+    [key: string]: unknown
     add?: string[]
     save?: boolean
     saveType?: "prod" | "dev" | "optional" | "peer"
